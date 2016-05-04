@@ -57,7 +57,11 @@
     });
 
     $("#videoform").submit(function() {
-        if (!to.val() && !uid){
+        if (!uid || uid == ""){
+            appendLog($("<div>You are not log in, can not start video</div>"));
+            return false;
+        }
+        if (!to.val() || !uid){
             appendLog($("<div>to is null, cannot start video</div>"));
             return false;
         }
