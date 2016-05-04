@@ -34,8 +34,10 @@
     function defaultErrCb(e){console.log("err ", e);}
 
     $("#loginform").submit(function() {
-        uid=$("#login").val()
-        conn.send(JSON.stringify({f:uid,k:2}));
+        if (!uid || uid == ""){
+            uid=$("#login").val()
+            conn.send(JSON.stringify({f:uid,k:2}));
+        }
         return false
         });
 
