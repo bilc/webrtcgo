@@ -136,7 +136,7 @@
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://{{$}}/ws");
         conn.onclose = function(evt) {
-            appendLog($("<div><b>Connection closed.</b></div>"))
+            appendLog($("<div><b>Connection closed. Refresh with F5</b></div>"))
         }
 
         conn.onmessage = function(evt) {
