@@ -1,5 +1,5 @@
-本项目为webrtc的signal的服务器和js实现
-
+本项目为webrtc的signal的服务器和js实现  
+示例地址 http://45.32.245.83:8080/  
 
 1. 安装启动turnserver  
 1.1 项目地址  
