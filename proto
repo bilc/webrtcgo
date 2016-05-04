@@ -1,0 +1,29 @@
+1.管道
+websocket:
+
+2.自定义协议
+格式json
+{f:,t:,k:}
+
+字段
+f:string        (from)
+t:string        (to)
+k:int           (kind)
+=0, text
+    c:string    (content)
+
+=2, user,pwd
+
+=3, user list
+    list:
+
+=11, webrtc negotiate
+    c:string         ask, agree, reject, stop
+    caller-->callee  c:ask
+    callee-->caller  agree  
+                     reject 
+    ...              stop 
+=12, webrtc signal
+    sdp:string
+    or candidate:string
+    or agree:bool

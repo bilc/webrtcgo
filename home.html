@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>WebRtc From github.com/biliucheng</title>
+<script src="./jquery-1.12.3.min.js"></script>
+<script type="text/javascript">
+    $(function() {
+
+    var uid;
+    var toVideoId;
+    var conn;
+    var pc; //peer connection
+
+    var configuration = {"iceServers": [
+                            {"urls": "stun:45.32.245.83:3478"}
+                            //,{urls: 'turn:turn.bistri.com:80',
+                            //credential: 'homeo',
+                            //username: 'homeo'}
+                        ]};
+    var msg = $("#msg");
+    var log = $("#log");
+    var to = $("#to");
+    var count =0;       
+                        
+    function appendLog(msg) {
+        var d = log[0]
+        var doScroll = d.scrollTop == d.scrollHeight - d.clientHeight;
+        msg.appendTo(log);
+        if (doScroll) {
+            d.scrollTop = d.scrollHeight - d.clientHeight;
+        }
+    }
+    function defaultOkCb(e){console.log("ok ", e);}
+    function defaultErrCb(e){console.log("err ", e);}
+
+    $("#loginform").submit(function() {
+        uid=$("#login").val()
+        conn.send(JSON.stringify({f:uid,k:2}));
+        return false
+        });
+
+    $("#form").submit(function() {
+        if (!conn) {
+            return false;
+        }
+        if (!uid){
+            appendLog($("<div/>").text("you are not login"));
+            return false;
+        }
+        if (!msg.val()) {
+            return false;
+        }
+        count++;
+        conn.send(JSON.stringify({f:uid,t:to.val(),k:0,c:msg.val()}));
+        msg.val("");
+        return false
+    });
+
+    $("#videoform").submit(function() {
+        if (!to.val() && !uid){
+            appendLog($("<div>to is null, cannot start video</div>"));
+            return false;
+        }
+        appendLog($("<div> start video "+to.val()+"</div>"));
+        conn.send(JSON.stringify({f:uid, t:to.val(), k:11, c: "ask" }));
+        console.log("video "+JSON.stringify({f:uid, t:to.val(), k:11, c: "ask" }));
+        //startVideo(true, to.val())
+        return false
+    });
+
+    $("#stopBt").click( stopVideo);
+
+    function stopVideo(){
+        pc.close();
+        console.log("!1!!close    ", pc);
+        remoteView.src = ""
+        selfView.src = ""
+        conn.send(JSON.stringify({f:uid, t:to.val(), k:11, c: "stop" }));
+    }
+
+    function startVideo(isCaller, other) {
+        var PeerConnection = (window.RTCPeerConnection ||
+                window.PeerConnection ||
+                window.webkitPeerConnection00 || 
+                window.webkitRTCPeerConnection || 
+                window.mozRTCPeerConnection);
+
+        pc = new PeerConnection(configuration);
+
+        pc.onicecandidate = function (evt) {
+            conn.send(JSON.stringify({f:uid, t:other, k:12, "candidate": evt.candidate }));
+        }
+        pc.onicecandidateerror = function(evt){
+            console.log("candidate error ", evt)
+        }
+        pc.onaddstream = function (evt) {
+            console.log("onaddstream remote stream")
+            var remoteView = document.getElementById('remoteView');
+            remoteView.src = URL.createObjectURL(evt.stream);
+            remoteView.style.height = '240px'
+            document.getElementById('logWrapper').style.top = '240px';
+            console.log(evt)
+        };
+
+        var getUserMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+        getUserMedia.call(navigator, 
+            { "audio": true, "video": true }, 
+            function (stream) {
+            console.log("getUserMedia ", isCaller)
+            var selfView = document.getElementById('selfView');
+            selfView.src = URL.createObjectURL(stream);
+            selfView.style.height = '240px'
+            document.getElementById('logWrapper').style.top = '240px';
+            pc.addStream(stream);
+
+            if (isCaller)
+                pc.createOffer(gotDescription, defaultErrCb);//没有error函数会不调用
+            else
+                pc.createAnswer(gotDescription, defaultErrCb);
+
+            function gotDescription(desc) {
+                console.log("set local sdp ")
+                pc.setLocalDescription(desc);
+                conn.send(JSON.stringify({f:uid,t:other, k:12, "sdp": desc }));
+            }},
+            function (e) {console.log("getUserMedia error ", e);}
+            );
+    }
+
+    if (window["WebSocket"]) {
+        conn = new WebSocket("ws://{{$}}/ws");
+        conn.onclose = function(evt) {
+            appendLog($("<div><b>Connection closed.</b></div>"))
+        }
+
+        conn.onmessage = function(evt) {
+            var signal = JSON.parse(evt.data);
+            if (signal.k == 12) { //webrtc signal
+                if (!pc){
+                    startVideo(false, signal.f); //被动
+                }
+                if (signal.sdp){
+                    pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                    console.log("set remote sdp")
+                } else if (signal.candidate){
+                    pc.addIceCandidate(new RTCIceCandidate(signal.candidate), defaultOkCb, defaultErrCb);
+                    console.log("set remote ice")
+                } 
+            } else if (signal.k == 11){
+                if (signal.c == "ask") {
+                    if (window.confirm("agree video ?")){
+                        conn.send(JSON.stringify({f:signal.t, t:signal.f, k:11, "c": "agree" }));
+                    } else {
+                        conn.send(JSON.stringify({f:signal.t, t:signal.f, k:11, "c": "reject"}));
+                    }
+                } else if (signal.c == "reject") {
+                    appendLog($("<div></div>").text("--"+signal.f+" say--"));
+                    appendLog($("<div/>").text(signal.c+" video"))
+                } else if (signal.c == "agree") {
+                    startVideo(true, to.val())
+                } else if (signal.c == "stop") {
+                    stopVideo();
+                }
+            }else if (signal.k == "3"){
+                var list = "";
+                for (var i=0; i<signal.c.length; i++) {
+                    if (signal.c[i] == ""){
+                        list += "<ul>*</ul>";
+                    } else 
+                        list += "<ul>" +signal.c[i]+"</ul>";
+                }
+                $("#onlinePerson").html(list)
+            } else {
+                appendLog($("<div></div>").text("--"+signal.f+" say--"));
+                appendLog($("<div/>").text(signal.c))
+            }
+        }
+        conn.onerror = function(evt){
+            appendLog($("<div/>error: ").text(evt.data))
+        }
+
+    } else {
+        appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"))
+    }
+
+    });
+</script>
+<style type="text/css">
+html, body {
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: gray;
+}
+
+#selfView , #remoteView{
+    position: absolute;
+    background: #fff;
+    top: 0;
+    height: 0;
+    left: 0;
+}
+#remoteView {left: 50%}
+
+#logWrapper {
+    position: absolute;
+    top: 0;
+    bottom: 72px;
+    left: 0;
+    width: 100%;
+}
+#logWrapper #log {
+    background: #fff;
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+}
+
+#loginform, #form, #videoform, #stopBt{
+    position: absolute;
+    margin: 0;
+    left: 0;
+    height: 24px;
+    width: 100%;
+}
+#loginform {
+    bottom: 48px;
+}
+#videoform {
+    bottom: 24px;
+}
+#stopBt {
+    bottom: 24px;
+    left: 16em;
+    width: 4em;
+}
+#form {
+    bottom: 0;
+}
+
+#dialog{
+    position: absolute;
+    left: 0;
+    top: 0px;
+    bottom: 0px;
+    right: 200px;
+    height:100%;
+}
+
+#list {
+    background: white;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 200px;
+    height:100%;
+}
+
+</style>
+</head>
+<body>
+
+<div id="dialog">
+    <video id="selfView" autoplay> your browser donot support html5 </video>
+    <video id="remoteView" autoplay> your browser donot support html5 </video>
+    <div id="logWrapper"><div id="log"></div></div>
+    <form id="form">
+        <input type="submit" value="Send" />
+        <input type="text" id="msg" size="64"/>
+    </form>
+    <form id="videoform">
+        <input type="submit" value="Video" />
+        <span>to</span>
+        <input type="text" id="to"  size="16"/>
+    </form>
+    <button id="stopBt" > stop </button>
+    <form id="loginform">
+        <input type="submit" value="LogIn" />
+        <input type="text" id="login" size="64"/>
+    </form>
+</div>
+
+<div id="list"> 在线的人 <br/><ul id="onlinePerson"></ul></div>
+</body>
+</html>
